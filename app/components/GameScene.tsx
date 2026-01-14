@@ -8,12 +8,18 @@ import StarField from './StarField';
 import Starship from './Starship';
 import Lasers, { LasersHandle } from './Lasers';
 import Enemies, { EnemiesHandle } from './Enemies';
+import StartMenu from './StartMenu';
+import LoadingScreen from './LoadingScreen';
 
 export default function GameScene() {
   const [shipPosition, setShipPosition] = useState<[number, number, number]>([0, 0, 0]);
   const [shipRotation, setShipRotation] = useState<[number, number, number]>([0, 0, 0]);
   const [score, setScore] = useState(0);
   const [speedDisplay, setSpeedDisplay] = useState(0.0);
+  const [shields, setShields] = useState(100);
+  const maxShields = 100;
+  const [shieldVisible, setShieldVisible] = useState(false);
+  const [gameState, setGameState] = useState<'START' | 'PLAYING'>('START');
   
   const speedRef = useRef(0.0);
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
@@ -40,8 +46,24 @@ export default function GameScene() {
     };
   }, []);
 
+  const resetGame = () => {
+    setScore(0);
+    setShields(100);
+    setShipPosition([0, 0, 0]);
+    setShipRotation([0, 0, 0]);
+    velocityRef.current.set(0, 0, 0);
+    speedRef.current = 0;
+    enemyRef.current?.reset();
+    laserRef.current?.reset();
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', backgroundColor: 'black' }}>
+      <LoadingScreen />
+      
+      {gameState === 'START' && (
+        <StartMenu onStart={() => setGameState('PLAYING')} />
+      )}
       <Canvas 
         shadows 
         camera={{ position: [0, 5, 20], fov: 60 }}
@@ -68,9 +90,13 @@ export default function GameScene() {
                 speedRef={speedRef}
                 velocityRef={velocityRef}
                 setSpeedDisplay={setSpeedDisplay}
+                shields={shields}
+                setShields={setShields}
+                setShieldVisible={setShieldVisible}
+                gameState={gameState}
             />
             
-            <Starship position={shipPosition} rotation={shipRotation} />
+            <Starship position={shipPosition} rotation={shipRotation} shieldVisible={shieldVisible} />
             <Lasers ref={laserRef} shipPosition={shipPosition} shipRotation={shipRotation} />
             <Enemies ref={enemyRef} velocityRef={velocityRef} shipPosition={shipPosition} />
             
@@ -97,6 +123,29 @@ export default function GameScene() {
       }}>
         LCARS OVERRIDE [VGR-74656] <br/>
         <span style={{ fontSize: '18px', opacity: 0.8 }}>KILLS: {score}</span>
+        <div style={{ marginTop: '10px', width: '250px', height: '12px', background: 'rgba(0,255,255,0.2)', border: '1px solid #00ffff' }}>
+            <div style={{ width: `${(shields / maxShields) * 100}%`, height: '100%', background: '#00ffff', transition: 'width 0.3s' }} />
+        </div>
+        <div style={{ fontSize: '12px', color: '#00ffff', marginBottom: '15px' }}>SHIELD INTEGRITY: {Math.round(shields)}%</div>
+        
+        <button 
+            onClick={resetGame}
+            style={{
+                background: 'rgba(255, 68, 0, 0.2)',
+                border: '1px solid #ff4400',
+                color: '#ff4400',
+                padding: '5px 15px',
+                fontFamily: "'Orbitron', sans-serif",
+                fontSize: '10px',
+                cursor: 'pointer',
+                letterSpacing: '2px',
+                pointerEvents: 'auto'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 68, 0, 0.4)'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 68, 0, 0.2)'}
+        >
+            RESET SIMULATION
+        </button>
       </div>
 
       <div style={{
@@ -131,12 +180,19 @@ interface GameLogicProps {
     speedRef: React.MutableRefObject<number>;
     velocityRef: React.MutableRefObject<THREE.Vector3>;
     setSpeedDisplay: React.Dispatch<React.SetStateAction<number>>;
+    shields: number;
+    setShields: React.Dispatch<React.SetStateAction<number>>;
+    setShieldVisible: React.Dispatch<React.SetStateAction<boolean>>;
+    gameState: 'START' | 'PLAYING';
 }
 
-function GameLogic({ keys, shipPosition, setShipPosition, shipRotation, setShipRotation, laserRef, enemyRef, setScoreVal, speedRef, velocityRef, setSpeedDisplay }: GameLogicProps) {
+function GameLogic({ keys, shipPosition, setShipPosition, shipRotation, setShipRotation, laserRef, enemyRef, setScoreVal, speedRef, velocityRef, setSpeedDisplay, shields, setShields, setShieldVisible, gameState }: GameLogicProps) {
     const shakeRef = useRef(0);
+    const lastHitRef = useRef(0);
 
     useFrame((state, delta) => {
+        if (gameState !== 'PLAYING') return;
+
         // 1. Rotation Logic
         const rotSpeed = 2.5 * delta;
         let [rX, rY, rZ] = shipRotation;
@@ -238,7 +294,8 @@ function GameLogic({ keys, shipPosition, setShipPosition, shipRotation, setShipR
                             const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                             const data = buffer.getChannelData(0);
                             for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i/bufferSize, 2);
-                            
+                            for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+
                             const noise = ctx.createBufferSource();
                             noise.buffer = buffer;
                             gain.gain.setValueAtTime(1.5, ctx.currentTime);
@@ -248,7 +305,28 @@ function GameLogic({ keys, shipPosition, setShipPosition, shipRotation, setShipR
                             gain.connect(ctx.destination);
                             noise.start();
                         }
-                     } catch(e) {}
+                    } catch (e) { }
+                }
+            });
+        }
+
+        // 7. Shield Regeneration & Collision
+        const now = state.clock.elapsedTime;
+        if (now - lastHitRef.current > 3.0) {
+            setShields(prev => Math.min(100, prev + delta * 5));
+        }
+
+        if (enemyRef.current) {
+            const projectiles = enemyRef.current.getProjectiles();
+            const shipVec = new THREE.Vector3(...shipPosition);
+            projectiles.forEach(p => {
+                const pVec = new THREE.Vector3(...p.position);
+                if (pVec.distanceTo(shipVec) < 6) {
+                    enemyRef.current?.removeProjectile(p.id);
+                    setShields(prev => Math.max(0, prev - 10));
+                    setShieldVisible(true);
+                    lastHitRef.current = now;
+                    setTimeout(() => setShieldVisible(false), 300);
                 }
             });
         }

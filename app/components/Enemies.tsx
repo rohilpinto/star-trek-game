@@ -29,6 +29,7 @@ export interface EnemiesHandle {
   getProjectiles: () => EnemyLaser[];
   removeEnemy: (id: string, withExp?: boolean) => void;
   removeProjectile: (id: string) => void;
+  reset: () => void;
 }
 
 interface EnemiesProps {
@@ -59,6 +60,11 @@ const Enemies = forwardRef<EnemiesHandle, EnemiesProps>(({ velocityRef, shipPosi
     },
     removeProjectile: (id: string) => {
         setProjectiles(prev => prev.filter(p => p.id !== id));
+    },
+    reset: () => {
+        setEnemies([]);
+        setProjectiles([]);
+        setExplosions([]);
     }
   }));
 

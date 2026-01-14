@@ -4,13 +4,15 @@ import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import { Group } from 'three';
+import ShieldEffect from './ShieldEffect';
 
 export interface StarshipProps {
   position: [number, number, number];
   rotation: [number, number, number];
+  shieldVisible?: boolean;
 }
 
-export default function Starship({ position, rotation }: StarshipProps) {
+export default function Starship({ position, rotation, shieldVisible = false }: StarshipProps) {
   const group = useRef<Group>(null);
   const { scene } = useGLTF('/star_trek_online__uss_enterprise_d.glb');
 
@@ -40,6 +42,9 @@ export default function Starship({ position, rotation }: StarshipProps) {
       
       {/* Engine Lights/Glows */}
       <pointLight position={[0, 2, -10]} intensity={2} color="#00ffff" distance={5} />
+      
+      {/* Shield Bubble */}
+      <ShieldEffect visible={shieldVisible} />
     </group>
   );
 }

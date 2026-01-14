@@ -13,6 +13,7 @@ export interface LasersHandle {
   startFiring: () => void;
   stopFiring: () => void;
   isFiring: boolean;
+  reset: () => void;
 }
 
 const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPosition, shipRotation }, ref) => {
@@ -97,7 +98,14 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPosition, shipRotati
             if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
         }
     },
-    isFiring: beamVisible
+    isFiring: beamVisible,
+    reset: () => {
+        setFiring(false);
+        setBeamVisible(false);
+        setChargeScale(0);
+        stopSound();
+        if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
+    }
   }), [firing, beamVisible]);
 
   useFrame((state, delta) => {
