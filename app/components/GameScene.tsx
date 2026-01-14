@@ -199,9 +199,11 @@ function GameLogic({ keys, shipPosition, setShipPosition, shipRotation, setShipR
         state.camera.position.lerp(camPos, 0.15);
         state.camera.lookAt(lookAtPos);
 
-        const targetFov = 60 + (currentSpeed * 0.4);
-        state.camera.fov = THREE.MathUtils.lerp(state.camera.fov, Math.min(100, targetFov), 0.1);
-        state.camera.updateProjectionMatrix();
+        if (state.camera instanceof THREE.PerspectiveCamera) {
+            const targetFov = 60 + (currentSpeed * 0.4);
+            state.camera.fov = THREE.MathUtils.lerp(state.camera.fov, Math.min(100, targetFov), 0.1);
+            state.camera.updateProjectionMatrix();
+        }
 
         // 5. Fire
         if (keys.current[' ']) {

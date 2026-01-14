@@ -172,9 +172,7 @@ function ExplosionEffect({ position }: { position: [number, number, number] }) {
                 <bufferGeometry>
                     <bufferAttribute 
                         attach="attributes-position" 
-                        count={count} 
-                        array={pts} 
-                        itemSize={3} 
+                        args={[pts, 3]} 
                     />
                 </bufferGeometry>
                 <pointsMaterial 

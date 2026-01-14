@@ -149,12 +149,10 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPosition, shipRotati
             <bufferGeometry>
                 <bufferAttribute
                    attach="attributes-position"
-                   count={particleCount}
-                   array={positions}
-                   itemSize={3}
+                   args={[positions, 3]}
                 />
             </bufferGeometry>
-            <pointsMaterial color="#ffcc00" size={0.15} transparent opacity={1} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
+            <pointsMaterial color="#ffcc00" size={0.15} transparent opacity={1} depthWrite={false} blending={THREE.AdditiveBlending} />
           </points>
 
           <mesh position={[0, 0.2, -0.5]}>
