@@ -5,11 +5,12 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 interface ShieldEffectProps {
-    visible: boolean;
+    visibleRef: React.MutableRefObject<boolean>;
     hitPoint?: THREE.Vector3;
 }
 
-export default function ShieldEffect({ visible, hitPoint }: ShieldEffectProps) {
+
+export default function ShieldEffect({ visibleRef, hitPoint }: ShieldEffectProps) {
     const meshRef = useRef<THREE.Mesh>(null);
     const materialRef = useRef<THREE.MeshBasicMaterial>(null);
     const pulseRef = useRef(0);
@@ -18,7 +19,7 @@ export default function ShieldEffect({ visible, hitPoint }: ShieldEffectProps) {
     useFrame((state, delta) => {
         if (!meshRef.current || !materialRef.current) return;
 
-        if (visible) {
+        if (visibleRef.current) {
             pulseRef.current = Math.min(1.5, pulseRef.current + delta * 10);
             materialRef.current.opacity = (Math.sin(state.clock.elapsedTime * 15) * 0.1 + 0.3) * (pulseRef.current / 1.5);
         } else {

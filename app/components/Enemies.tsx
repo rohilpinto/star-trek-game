@@ -36,9 +36,10 @@ export interface EnemiesHandle {
 interface EnemiesProps {
     velocityRef: React.MutableRefObject<THREE.Vector3>;
     shipPositionRef: React.MutableRefObject<THREE.Vector3>;
+    onEnemyDestroyed?: (position: THREE.Vector3) => void;
 }
 
-const Enemies = forwardRef<EnemiesHandle, EnemiesProps>(({ velocityRef, shipPositionRef }, ref) => {
+const Enemies = forwardRef<EnemiesHandle, EnemiesProps>(({ velocityRef, shipPositionRef, onEnemyDestroyed }, ref) => {
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const projectilesRef = useRef<EnemyLaser[]>([]);
   const [explosions, setExplosions] = useState<Explosion[]>([]);
@@ -127,15 +128,16 @@ const Enemies = forwardRef<EnemiesHandle, EnemiesProps>(({ velocityRef, shipPosi
     getEnemies: () => enemies,
     getProjectiles: () => projectilesRef.current,
     removeEnemy: (id: string, withExp = true) => {
-        setEnemies(prev => {
-            const victim = prev.find(e => e.id === id);
-            if (victim && withExp) {
+        const victim = enemies.find(e => e.id === id);
+        if (victim) {
+            setEnemies(prev => prev.filter(e => e.id !== id));
+            if (withExp) {
                 const expId = Math.random().toString(36).substr(2,9);
                 setExplosions(exps => [...exps, { id: expId, position: [victim.position.x, victim.position.y, victim.position.z], time: performance.now() }]);
                 playExplosionSound(victim.position);
+                if (onEnemyDestroyed) onEnemyDestroyed(victim.position);
             }
-            return prev.filter(e => e.id !== id);
-        });
+        }
     },
     removeProjectile: (id: string) => {
         projectilesRef.current = projectilesRef.current.filter(p => p.id !== id);

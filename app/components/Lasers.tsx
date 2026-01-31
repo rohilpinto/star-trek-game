@@ -27,7 +27,7 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
   const groupRef = useRef<THREE.Group>(null);
   const [firing, setFiring] = useState(false);
   const [beamVisible, setBeamVisible] = useState(false);
-  const [chargeScale, setChargeScale] = useState(0);
+  const chargeScaleRef = useRef(0);
   const [weaponMode, setWeaponMode] = useState<'PHASERS' | 'TORPEDOES'>('PHASERS');
   
   const torpedoesRef = useRef<Torpedo[]>([]);
@@ -135,7 +135,7 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
         if (activeMode === 'PHASERS') {
             if (!firing) {
                 setFiring(true);
-                setChargeScale(0.1);
+                chargeScaleRef.current = 0.1;
                 startPhaserSound();
                 chargeTimeoutRef.current = setTimeout(() => { setBeamVisible(true); }, 250);
             }
@@ -152,7 +152,7 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
         if (firing) {
             setFiring(false);
             setBeamVisible(false);
-            setChargeScale(0);
+            chargeScaleRef.current = 0;
             stopPhaserSound();
             if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
         }
@@ -163,7 +163,7 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
     reset: () => {
         setFiring(false);
         setBeamVisible(false);
-        setChargeScale(0);
+        chargeScaleRef.current = 0;
         stopPhaserSound();
         torpedoesRef.current = [];
         if (chargeTimeoutRef.current) clearTimeout(chargeTimeoutRef.current);
@@ -184,10 +184,15 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
     torpedoesRef.current = torpedoesRef.current.filter(t => t.life > 0);
 
     // Phaser Logic
-    if (firing && weaponMode === 'PHASERS' && chargeScale < 1 && !beamVisible) {
-        setChargeScale(prev => Math.min(1, prev + delta * 4));
+    if (firing && weaponMode === 'PHASERS' && chargeScaleRef.current < 1 && !beamVisible) {
+        chargeScaleRef.current = Math.min(1, chargeScaleRef.current + delta * 4);
     }
-    if (ringRef.current) ringRef.current.rotation.z += 0.15;
+    if (ringRef.current) {
+        ringRef.current.rotation.z += 0.15;
+        // Manual scale update for performance
+        const scale = chargeScaleRef.current;
+        ringRef.current.scale.set(scale, scale, scale);
+    }
 
     if (particlesRef.current) {
         const attr = particlesRef.current.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -227,7 +232,7 @@ const Lasers = forwardRef<LasersHandle, LasersProps>(({ shipPositionRef, shipRot
       <group ref={groupRef}>
         {firing && weaponMode === 'PHASERS' && !beamVisible && (
             <mesh ref={ringRef} position={[0, 0.2, 0.5]} rotation={[Math.PI / 2, 0, 0]}>
-                <torusGeometry args={[1.8 * chargeScale, 0.08, 16, 100]} />
+                <torusGeometry args={[1.8, 0.08, 16, 100]} />
                 <meshBasicMaterial color="#ffcc00" transparent opacity={0.9} />
             </mesh>
         )}

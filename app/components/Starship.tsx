@@ -4,10 +4,10 @@ import { Group } from 'three';
 import ShieldEffect from './ShieldEffect';
 
 export interface StarshipProps {
-  shieldVisible?: boolean;
+  shieldVisibleRef: React.MutableRefObject<boolean>;
 }
 
-const Starship = forwardRef<Group, StarshipProps>(({ shieldVisible = false }, ref) => {
+const Starship = forwardRef<Group, StarshipProps>(({ shieldVisibleRef }, ref) => {
   const { scene } = useGLTF('/star_trek_online__uss_enterprise_d.glb');
 
   return (
@@ -22,7 +22,7 @@ const Starship = forwardRef<Group, StarshipProps>(({ shieldVisible = false }, re
       <pointLight position={[0, 2, -10]} intensity={2} color="#00ffff" distance={5} />
       
       {/* Shield Bubble */}
-      <ShieldEffect visible={shieldVisible} />
+      <ShieldEffect visibleRef={shieldVisibleRef} />
     </group>
   );
 });

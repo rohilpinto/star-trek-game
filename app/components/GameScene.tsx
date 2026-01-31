@@ -10,6 +10,8 @@ import Lasers, { LasersHandle } from './Lasers';
 import Enemies, { EnemiesHandle } from './Enemies';
 import StartMenu from './StartMenu';
 import LoadingScreen from './LoadingScreen';
+import Asteroids, { AsteroidsHandle } from './Asteroids';
+import PowerUps, { PowerUpsHandle } from './PowerUps';
 
 export default function GameScene() {
   const [score, setScore] = useState(0);
@@ -21,8 +23,15 @@ export default function GameScene() {
   const [distanceFromStarbase, setDistanceFromStarbase] = useState(0);
   const maxShields = 100;
   const maxHull = 100;
-  const [shieldVisible, setShieldVisible] = useState(false);
+  const [shieldVisible, setShieldVisible] = useState(false); // Keep for now if needed, but we use ref for 3D
   const [gameState, setGameState] = useState<'START' | 'PLAYING' | 'GAMEOVER'>('START');
+  
+  // Refs for performance (Throttled UI updates)
+  const scoreRef = useRef(0);
+  const xpRef = useRef(0);
+  const shieldsRef = useRef(100);
+  const hullRef = useRef(100);
+  const shieldVisibleRef = useRef(false);
   
   const xpToNextRank = 1000;
   const rankTitles = ['Ensign', 'Lieutenant', 'Commander', 'Captain', 'Admiral'];
@@ -39,6 +48,8 @@ export default function GameScene() {
   const velocityRef = useRef(new THREE.Vector3(0, 0, 0));
   const laserRef = useRef<LasersHandle>(null);
   const enemyRef = useRef<EnemiesHandle>(null);
+  const asteroidsRef = useRef<AsteroidsHandle>(null);
+  const powerUpsRef = useRef<PowerUpsHandle>(null);
   
   const keys = useRef<{ [key: string]: boolean }>({});
 
@@ -65,6 +76,7 @@ export default function GameScene() {
     setXp(0);
     setShields(100);
     setHull(100);
+    setDistanceFromStarbase(0);
     setGameState('PLAYING');
     shipPositionRef.current.set(0, 0, 0);
     shipRotationRef.current.set(0, 0, 0);
@@ -72,6 +84,7 @@ export default function GameScene() {
     speedRef.current = 0;
     enemyRef.current?.reset();
     laserRef.current?.reset();
+    powerUpsRef.current?.reset();
   };
 
   return (
@@ -97,9 +110,16 @@ export default function GameScene() {
             {gameState !== 'GAMEOVER' && (
                 <>
                     <StarField velocityRef={velocityRef} shipPositionRef={shipPositionRef} />
-                    <Starship ref={starshipRef} shieldVisible={shieldVisible} />
+                    <Starship ref={starshipRef} shieldVisibleRef={shieldVisibleRef} />
                     <Lasers ref={laserRef} shipPositionRef={shipPositionRef} shipRotationRef={shipRotationRef} />
-                    <Enemies ref={enemyRef} velocityRef={velocityRef} shipPositionRef={shipPositionRef} />
+                    <Enemies 
+                        ref={enemyRef} 
+                        velocityRef={velocityRef} 
+                        shipPositionRef={shipPositionRef} 
+                        onEnemyDestroyed={(pos) => powerUpsRef.current?.drop(pos)}
+                    />
+                    <Asteroids ref={asteroidsRef} shipPositionRef={shipPositionRef} />
+                    <PowerUps ref={powerUpsRef} shipPositionRef={shipPositionRef} />
                 </>
             )}
             
@@ -110,19 +130,24 @@ export default function GameScene() {
                 starshipRef={starshipRef}
                 laserRef={laserRef}
                 enemyRef={enemyRef}
+                asteroidsRef={asteroidsRef}
+                powerUpsRef={powerUpsRef}
                 setScoreVal={setScore}
                 setXpVal={setXp}
                 speedRef={speedRef}
                 velocityRef={velocityRef}
                 setSpeedDisplay={setSpeedDisplay}
                 setDistanceVal={setDistanceFromStarbase}
-                shields={shields}
                 setShields={setShields}
-                hull={hull}
                 setHull={setHull}
-                setShieldVisible={setShieldVisible}
+                setShieldVisible={setShieldVisible} // Keep for HUD or other logic? Actually removed from prop
                 gameState={gameState}
                 setGameState={setGameState}
+                scoreRef={scoreRef}
+                xpRef={xpRef}
+                shieldsRef={shieldsRef}
+                hullRef={hullRef}
+                shieldVisibleRef={shieldVisibleRef}
             />
             
             <EffectComposer>
@@ -144,7 +169,7 @@ export default function GameScene() {
         position: 'absolute', top: 30, left: 40, color: '#00ffff',
         fontFamily: "'Orbitron', sans-serif", fontSize: '24px', pointerEvents: 'none',
         textShadow: '0 0 10px #00ffff',
-        fontWeight: 'bold'
+        fontWeight: 'bold', zIndex: 100
       }}>
         LCARS OVERRIDE [VGR-74656] <br/>
         <div style={{ fontSize: '12px', color: '#ffcc00', letterSpacing: '1px', marginBottom: '10px' }}>
@@ -277,19 +302,25 @@ interface GameLogicProps {
     velocityRef: React.MutableRefObject<THREE.Vector3>;
     setSpeedDisplay: React.Dispatch<React.SetStateAction<number>>;
     setDistanceVal: React.Dispatch<React.SetStateAction<number>>;
-    shields: number;
     setShields: React.Dispatch<React.SetStateAction<number>>;
-    hull: number;
     setHull: React.Dispatch<React.SetStateAction<number>>;
     setShieldVisible: React.Dispatch<React.SetStateAction<boolean>>;
     gameState: 'START' | 'PLAYING' | 'GAMEOVER';
     setGameState: React.Dispatch<React.SetStateAction<'START' | 'PLAYING' | 'GAMEOVER'>>;
+    asteroidsRef: React.RefObject<AsteroidsHandle | null>;
+    powerUpsRef: React.RefObject<PowerUpsHandle | null>;
+    // New Refs
+    scoreRef: React.MutableRefObject<number>;
+    xpRef: React.MutableRefObject<number>;
+    shieldsRef: React.MutableRefObject<number>;
+    hullRef: React.MutableRefObject<number>;
+    shieldVisibleRef: React.MutableRefObject<boolean>;
 }
 
-function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserRef, enemyRef, setScoreVal, setXpVal, speedRef, velocityRef, setSpeedDisplay, setDistanceVal, shields, setShields, hull, setHull, setShieldVisible, gameState, setGameState }: GameLogicProps) {
+function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserRef, enemyRef, asteroidsRef, powerUpsRef, setScoreVal, setXpVal, speedRef, velocityRef, setSpeedDisplay, setDistanceVal, setShields, setHull, setShieldVisible, gameState, setGameState, scoreRef, xpRef, shieldsRef, hullRef, shieldVisibleRef }: GameLogicProps) {
     const shakeRef = useRef(0);
     const lastHitRef = useRef(0);
-    const frameCount = useRef(0);
+    const lastUiSyncRef = useRef(0);
 
     useFrame((state, delta) => {
         if (gameState !== 'PLAYING') return;
@@ -321,11 +352,18 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
         const currentSpeed = velocityRef.current.length();
         speedRef.current = currentSpeed;
         
-        // Update HUD display less frequently to save React cycles
-        frameCount.current++;
-        if (frameCount.current % 10 === 0) {
+        // Throttled UI Sync (10fps)
+        if (state.clock.elapsedTime - lastUiSyncRef.current > 0.1) {
             setSpeedDisplay(Math.round(currentSpeed * 10) / 10);
             setDistanceVal(Math.round(shipPositionRef.current.length()));
+            
+            // Sync Game Stats
+            setScoreVal(scoreRef.current);
+            setXpVal(xpRef.current);
+            setShields(Math.round(shieldsRef.current));
+            setHull(Math.round(hullRef.current));
+            
+            lastUiSyncRef.current = state.clock.elapsedTime;
         }
 
         // 3. Position Update
@@ -392,15 +430,12 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
                     // Apply Damage (with cooldown)
                     if (state.clock.elapsedTime - lastHitRef.current > 0.5) {
                         const damage = 25;
-                        if (shields > 0) {
-                            setShields(prev => Math.max(0, prev - damage));
-                            setShieldVisible(true);
+                        if (shieldsRef.current > 0) {
+                            shieldsRef.current = Math.max(0, shieldsRef.current - damage);
+                            shieldVisibleRef.current = true;
                         } else {
-                            setHull(prev => {
-                                const next = Math.max(0, prev - damage);
-                                if (next === 0) setGameState('GAMEOVER');
-                                return next;
-                            });
+                            hullRef.current = Math.max(0, hullRef.current - damage);
+                            if (hullRef.current === 0) setGameState('GAMEOVER');
                         }
                         
                         shakeRef.current = 1.0;
@@ -421,15 +456,12 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
                 if (dist < 10) {
                     if (state.clock.elapsedTime - lastHitRef.current > 0.3) {
                         const damage = 10;
-                        if (shields > 0) {
-                            setShields(prev => Math.max(0, prev - damage));
-                            setShieldVisible(true);
+                        if (shieldsRef.current > 0) {
+                            shieldsRef.current = Math.max(0, shieldsRef.current - damage);
+                            shieldVisibleRef.current = true;
                         } else {
-                            setHull(prev => {
-                                const next = Math.max(0, prev - damage);
-                                if (next === 0) setGameState('GAMEOVER');
-                                return next;
-                            });
+                            hullRef.current = Math.max(0, hullRef.current - damage);
+                            if (hullRef.current === 0) setGameState('GAMEOVER');
                         }
                         shakeRef.current = 0.5;
                         lastHitRef.current = state.clock.elapsedTime;
@@ -437,6 +469,49 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
                     }
                 }
             });
+
+            // Asteroid Collision
+            if (asteroidsRef.current) {
+                const asteroids = asteroidsRef.current.getAsteroids();
+                asteroids.forEach(a => {
+                    const dist = shipPositionRef.current.distanceTo(a.position);
+                    if (dist < a.scale + 10) {
+                        if (state.clock.elapsedTime - lastHitRef.current > 0.8) {
+                            const damage = 20;
+                            if (shieldsRef.current > 0) {
+                                shieldsRef.current = Math.max(0, shieldsRef.current - damage);
+                                shieldVisibleRef.current = true;
+                            } else {
+                                hullRef.current = Math.max(0, hullRef.current - damage);
+                                if (hullRef.current === 0) setGameState('GAMEOVER');
+                            }
+                            shakeRef.current = 1.2;
+                            lastHitRef.current = state.clock.elapsedTime;
+                            
+                            // Knockback from asteroid
+                            const pushDir = shipPositionRef.current.clone().sub(a.position).normalize();
+                            velocityRef.current.addScaledVector(pushDir, 30);
+                        }
+                    }
+                });
+            }
+
+            // PowerUp Collection
+            if (powerUpsRef.current) {
+                const pickups = powerUpsRef.current.getPowerUps();
+                pickups.forEach(p => {
+                    const dist = shipPositionRef.current.distanceTo(p.position);
+                    if (dist < 15) {
+                        if (p.type === 'SHIELD') shieldsRef.current = Math.min(100, shieldsRef.current + 50);
+                        if (p.type === 'HULL') hullRef.current = Math.min(100, hullRef.current + 25);
+                        if (p.type === 'BOOST') velocityRef.current.multiplyScalar(1.5);
+                        
+                        powerUpsRef.current?.collect(p.id);
+                        // Visual flash/shake for collection
+                        shakeRef.current = 0.3;
+                    }
+                });
+            }
 
             // Phaser Collision (Hitscan-like)
             if (laserRef.current?.isFiring && laserRef.current.weapon === 'PHASERS') {
@@ -447,8 +522,8 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
                     const alignment = toEnemy.dot(forward);
                     if (alignment > 0.992 && shipPositionRef.current.distanceTo(enemyVec) < 250) {
                         enemyRef.current?.removeEnemy(enemy.id);
-                        setScoreVal(s => s + 100);
-                        setXpVal(x => x + 250);
+                        scoreRef.current += 100;
+                        xpRef.current += 250;
                     }
                 });
             }
@@ -460,8 +535,8 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
                     if (!enemy.active) return;
                     if (t.position.distanceTo(enemy.position) < 15) {
                         enemyRef.current?.removeEnemy(enemy.id);
-                        setScoreVal(s => s + 200);
-                        setXpVal(x => x + 500);
+                        scoreRef.current += 200;
+                        xpRef.current += 500;
                         t.life = 0; // Destroy torpedo on hit
                     }
                 });
@@ -471,7 +546,12 @@ function GameLogic({ keys, shipPositionRef, shipRotationRef, starshipRef, laserR
         // 7. Shield Regeneration & Collision
         const now = state.clock.elapsedTime;
         if (now - lastHitRef.current > 3.0) {
-            setShields(prev => Math.min(100, prev + delta * 5));
+            shieldsRef.current = Math.min(100, shieldsRef.current + delta * 5);
+        }
+        
+        // Turn off shield visibility after a short time
+        if (now - lastHitRef.current > 0.5 && shieldVisibleRef.current) {
+            shieldVisibleRef.current = false;
         }
     });
     return null;

@@ -17,23 +17,27 @@ const vertexShader = `
   uniform vec3 uShipPosMod;
   uniform vec3 uCameraOffset;
   uniform float uRadius;
+  uniform vec3 uVelocity;
 
   void main() {
     vColor = color;
     
-    // Calculate relative position within the infinite grid
-    // We use a modular ship position passed from JS to maintain precision
     vec3 relPos = mod(position - uShipPosMod + uRadius, uRadius * 2.0) - uRadius;
     
-    // Render relative to the camera to avoid huge world coordinates
-    // uCameraOffset is (CameraPosition - ShipPosition)
-    vec4 mvPosition = modelViewMatrix * vec4(relPos - uCameraOffset, 1.0);
+    // Warp Stretch Logic
+    float speed = length(uVelocity);
+    vec3 dir = normalize(uVelocity + 0.0001);
     
-    // Distance-based size attenuation
-    gl_PointSize = size * (300.0 / -mvPosition.z);
+    // Only stretch if moving fast
+    float stretchScale = smoothstep(20.0, 100.0, speed) * 0.15;
+    vec3 stretch = dir * dot(relPos, dir) * stretchScale;
+    
+    vec4 mvPosition = modelViewMatrix * vec4(relPos - uCameraOffset + stretch, 1.0);
+    
+    // Dynamic Size based on speed and distance
+    gl_PointSize = size * (300.0 / -mvPosition.z) * (1.0 + stretchScale * 2.0);
     gl_Position = projectionMatrix * mvPosition;
     
-    // Fade out stars near the wrapping boundary to prevent popping
     float dist = length(relPos);
     vOpacity = opacity * smoothstep(uRadius, uRadius * 0.8, dist);
   }
@@ -44,11 +48,9 @@ const fragmentShader = `
   varying float vOpacity;
 
   void main() {
-    // Round stars
     float dist = distance(gl_PointCoord, vec2(0.5));
     if (dist > 0.5) discard;
     
-    // Soft edges
     float alpha = vOpacity * smoothstep(0.5, 0.4, dist);
     gl_FragColor = vec4(vColor, alpha);
   }
@@ -91,6 +93,7 @@ const StarField = ({ velocityRef, shipPositionRef }: StarFieldProps) => {
   const uniforms = useMemo(() => ({
     uShipPosMod: { value: new THREE.Vector3() },
     uCameraOffset: { value: new THREE.Vector3() },
+    uVelocity: { value: new THREE.Vector3() },
     uRadius: { value: radius }
   }), [radius]);
 
@@ -102,7 +105,6 @@ const StarField = ({ velocityRef, shipPositionRef }: StarFieldProps) => {
         const shipPos = shipPositionRef.current;
         const camPos = state.camera.position;
 
-        // Keep the ship position modular to [0, 2*radius] for shader precision
         shipMod.set(
             shipPos.x % (radius * 2),
             shipPos.y % (radius * 2),
@@ -114,9 +116,9 @@ const StarField = ({ velocityRef, shipPositionRef }: StarFieldProps) => {
         
         uniforms.uShipPosMod.value.copy(shipMod);
 
-        // Camera offset relative to ship
         camOffset.subVectors(camPos, shipPos);
         uniforms.uCameraOffset.value.copy(camOffset);
+        uniforms.uVelocity.value.copy(velocityRef.current);
     }
   });
 
